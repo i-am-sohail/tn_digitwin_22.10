@@ -1,0 +1,81 @@
+/* Custom CSS Extensions & Animation Engines */
+
+/* Tab Active States */
+.nav-tab.active-tab {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.nav-tab {
+  color: #94a3b8;
+}
+
+.nav-tab:hover:not(.active-tab) {
+  background-color: rgba(51, 65, 85, 0.5);
+  color: #f1f5f9;
+}
+
+/* Custom Leaflet Map Dark Theme Styling */
+.leaflet-container {
+  background-color: #0f172a !important;
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border: 1px solid #475569;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+.leaflet-popup-content h4 {
+  color: #fbbf24;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+/* Sync Spinner Rotation Animation */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Toast Slide Animation */
+.toast-slide-in {
+  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

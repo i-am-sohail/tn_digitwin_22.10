@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { lat, lon } = req.query;
   const token = process.env.WAQI_TOKEN;
 
@@ -20,4 +20,4 @@ export default async function handler(req, res) {
   } catch (error) {
     return res.status(500).json({ error: "Internal AQI Proxy Error" });
   }
-}
+};

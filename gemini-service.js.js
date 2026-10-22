@@ -1,26 +1,11 @@
 /**
- * Gemini AI & Google OAuth Integration Service
- * Handles user authentication via GIS SDK and Gemini REST API generation requests.
+ * Gemini AI Integration Service (Routed securely through Vercel Serverless Function)
  */
 
 const GeminiService = (function () {
-  let geminiApiKey = localStorage.getItem('tn_digital_twin_gemini_key') || '';
   let currentUser = JSON.parse(localStorage.getItem('tn_digital_twin_user') || 'null');
 
   return {
-    getApiKey: function () {
-      return geminiApiKey;
-    },
-
-    setApiKey: function (key) {
-      geminiApiKey = key.trim();
-      if (geminiApiKey) {
-        localStorage.setItem('tn_digital_twin_gemini_key', geminiApiKey);
-      } else {
-        localStorage.removeItem('tn_digital_twin_gemini_key');
-      }
-    },
-
     getUser: function () {
       return currentUser;
     },
@@ -35,50 +20,26 @@ const GeminiService = (function () {
     },
 
     /**
-     * Send Prompt to Google Gemini 2.5 Flash REST API Endpoint
+     * Send Prompt to Vercel Serverless Proxy Endpoint
      */
     generateContent: async function (promptText, systemInstruction = "") {
-      if (!geminiApiKey) {
-        throw new Error("Gemini API Key is not configured. Please click the 'Gemini API' button in the top navigation bar to enter your key.");
-      }
-
-      // Endpoint for Gemini 2.5 Flash model
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-
-      const payload = {
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: promptText }]
-          }
-        ]
-      };
-
-      if (systemInstruction) {
-        payload.systemInstruction = {
-          parts: [{ text: systemInstruction }]
-        };
-      }
-
-      const response = await fetch(url, {
+      const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ promptText, systemInstruction })
       });
 
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error?.message || `Gemini API Error: Status ${response.status}`);
-      }
-
       const data = await response.json();
-      const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
-      if (!generatedText) {
-        throw new Error("Received empty response from Gemini API.");
+
+      if (!response.ok) {
+        throw new Error(data.error || `Server Error: ${response.status}`);
       }
 
-      return generatedText;
+      if (!data.text) {
+        throw new Error("Received empty response from Gemini Proxy.");
+      }
+
+      return data.text;
     },
 
     /**
@@ -123,7 +84,6 @@ Please format the response into clear sections:
 
       const prompt = `
 Context Data: Currently viewing ${currentDistrictData ? currentDistrictData.name : 'Tamil Nadu State'} Digital Twin dashboard.
-Available 38 Tamil Nadu Districts Baseline dataset in memory.
 
 User Question: "${queryText}"
 

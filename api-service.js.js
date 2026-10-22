@@ -1,15 +1,9 @@
 /**
  * API Service Adapter & Data Aggregator
- * Provides live fetching for Weather, AQI, and TN Government Datasets
- * with zero-crash fallback mechanisms to cached baseline JSON data.
+ * Fetches live weather and AQI via secure Vercel Serverless Proxy Endpoints.
  */
 
 const APIService = (function () {
-  // Config keys (can be overridden by user or fallback to public endpoints)
-  let weatherApiKey = '5f8e03fcbe1faf6be53e8c4919a4b114';
-  let waqiToken = 'f9c25b4623acefad3f0ea356eb6a5a434c3eeaa1';
-
-  // COMPLETE BASELINE DATASET FOR ALL 38 DISTRICTS OF TAMIL NADU
   const TN_DISTRICT_BASELINE = {
     "ARI": { name: "Ariyalur", headquarters: "Ariyalur", lat: 11.14, lon: 79.08, population: 754894, area_km2: 2027.6, literacy_pct: 71.34, crops: ["Paddy", "Sugarcane", "Cashew"], yield: 3.4, soil_index: 72, irrigation: 68, hospitals: 14, phc: 32, schools: 8.5, roads: 1420, exp: 125, land: [12, 68, 20] },
     "CHG": { name: "Chengalpattu", headquarters: "Chengalpattu", lat: 12.69, lon: 79.98, population: 2556244, area_km2: 2802.6, literacy_pct: 84.49, crops: ["Paddy", "Pulses", "Vegetables"], yield: 3.8, soil_index: 78, irrigation: 75, hospitals: 42, phc: 65, schools: 11.2, roads: 2850, exp: 410, land: [35, 45, 20] },
@@ -51,19 +45,12 @@ const APIService = (function () {
     "VIR": { name: "Virudhunagar", headquarters: "Virudhunagar", lat: 9.59, lon: 78.28, population: 1942288, area_km2: 4288.0, literacy_pct: 80.15, crops: ["Cotton", "Maize", "Chilli", "Fireworks/Ind"], yield: 3.2, soil_index: 69, irrigation: 58, hospitals: 36, phc: 52, schools: 11.4, roads: 3200, exp: 390, land: [28, 52, 20] }
   };
 
-  /**
-   * Helper function for HTTP requests with timeout using AbortController
-   */
   async function fetchWithTimeout(resource, options = {}) {
     const { timeout = 5000 } = options;
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
-    
     try {
-      const response = await fetch(resource, {
-        ...options,
-        signal: controller.signal
-      });
+      const response = await fetch(resource, { ...options, signal: controller.signal });
       clearTimeout(id);
       return response;
     } catch (error) {
@@ -73,25 +60,25 @@ const APIService = (function () {
   }
 
   /**
-   * Fetch Live Weather Data from OpenWeatherMap API
+   * Fetch Live Weather Data from Vercel Serverless Function
    */
   async function fetchLiveWeather(lat, lon) {
     try {
-      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${weatherApiKey}&units=metric`;
-      const res = await fetchWithTimeout(url, { timeout: 4500 });
-      if (!res.ok) throw new Error(`Weather HTTP Error ${res.status}`);
+      const url = `/api/weather?lat=${lat}&lon=${lon}`;
+      const res = await fetchWithTimeout(url, { timeout: 5000 });
+      if (!res.ok) throw new Error(`Weather Proxy Error ${res.status}`);
       const data = await res.json();
       return {
         temp: Math.round(data.main.temp),
         humidity: data.main.humidity,
-        wind_speed: Math.round(data.wind.speed * 3.6), // m/s to km/h
+        wind_speed: Math.round(data.wind.speed * 3.6),
         rainfall_mm: data.rain ? (data.rain['1h'] || data.rain['3h'] || 0) : 0,
         condition: data.weather[0].main,
         icon: getWeatherIconClass(data.weather[0].main),
         isLive: true
       };
     } catch (err) {
-      console.warn("Weather API failed/timed out. Falling back to realistic simulation baseline.", err.message);
+      console.warn("Weather Proxy failed. Falling back to cached baseline.", err.message);
       return {
         temp: 31 + Math.floor(Math.random() * 4),
         humidity: 65 + Math.floor(Math.random() * 15),
@@ -105,15 +92,14 @@ const APIService = (function () {
   }
 
   /**
-   * Fetch Live AQI from WAQI API
+   * Fetch Live AQI from Vercel Serverless Function
    */
   async function fetchLiveAQI(lat, lon) {
     try {
-      const url = `https://api.waqi.info/feed/geo:${lat};${lon}/?token=${waqiToken}`;
-      const res = await fetchWithTimeout(url, { timeout: 4500 });
-      if (!res.ok) throw new Error(`AQI HTTP Error ${res.status}`);
+      const url = `/api/aqi?lat=${lat}&lon=${lon}`;
+      const res = await fetchWithTimeout(url, { timeout: 5000 });
+      if (!res.ok) throw new Error(`AQI Proxy Error ${res.status}`);
       const j = await res.json();
-      if (j.status !== 'ok') throw new Error("AQI station data unavailable");
 
       const aqiVal = j.data.aqi;
       const pm25 = j.data.iaqi?.pm25?.v || Math.round(aqiVal * 0.6);
@@ -128,7 +114,7 @@ const APIService = (function () {
         isLive: true
       };
     } catch (err) {
-      console.warn("AQI API failed/timed out. Falling back to baseline.", err.message);
+      console.warn("AQI Proxy failed. Falling back to cached baseline.", err.message);
       const baseAqi = 55 + Math.floor(Math.random() * 35);
       return {
         value: baseAqi,
@@ -169,9 +155,6 @@ const APIService = (function () {
     return map[cond] || 'fa-cloud-sun';
   }
 
-  /**
-   * Public API Service Methods
-   */
   return {
     getBaselineDistricts: function () {
       return TN_DISTRICT_BASELINE;
@@ -181,7 +164,6 @@ const APIService = (function () {
       const base = TN_DISTRICT_BASELINE[districtCode];
       if (!base) throw new Error(`Unknown district code: ${districtCode}`);
 
-      // Async fetch live feeds in parallel with timeout safeguards
       const [weather, aqi] = await Promise.all([
         fetchLiveWeather(base.lat, base.lon),
         fetchLiveAQI(base.lat, base.lon)

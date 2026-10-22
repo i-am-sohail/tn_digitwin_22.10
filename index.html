@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tamil Nadu District Digital Twin Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Leaflet CSS & JS CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Identity Services (OAuth 2.0) CDN -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- TOP HEADER / NAV BAR -->
+  <header class="bg-slate-800/90 border-b border-slate-700/80 sticky top-0 z-50 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-red-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+          <i class="fa-solid fa-earth-asia text-white text-xl"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-none bg-gradient-to-r from-amber-400 via-orange-300 to-red-400 bg-clip-text text-transparent">
+            Tamil Nadu Digital Twin
+          </h1>
+          <p class="text-xs text-slate-400 mt-1">TN State 38 District Real-Time Data & AI Engine</p>
+        </div>
+      </div>
+
+      <!-- Header Controls: Time, API Sync & Auth -->
+      <div class="flex items-center space-x-3">
+        <!-- Live Clock -->
+        <div class="hidden md:flex flex-col text-right px-3 border-r border-slate-700">
+          <span id="live-clock" class="text-xs font-mono font-semibold text-amber-400">00:00:00 AM</span>
+          <span id="live-date" class="text-[10px] text-slate-400">TN Standard Time</span>
+        </div>
+
+        <!-- Sync Button -->
+        <button id="update-data-btn" class="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold px-3 py-2 rounded-lg transition border border-slate-600 shadow-sm">
+          <i class="fa-solid fa-arrows-rotate id-sync-icon"></i>
+          <span class="hidden sm:inline">Update Data</span>
+        </button>
+
+        <!-- Gemini API Key Button -->
+        <button id="open-key-modal-btn" class="flex items-center space-x-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-md">
+          <i class="fa-solid fa-key"></i>
+          <span class="hidden sm:inline" id="gemini-status-label">Gemini API</span>
+        </button>
+
+        <!-- Google OAuth Profile / Sign In -->
+        <div id="g-auth-container" class="flex items-center">
+          <div id="g_id_onload"
+            data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+            data-callback="handleGoogleOAuthResponse"
+            data-auto_prompt="false">
+          </div>
+          <button id="g-signin-btn" class="flex items-center space-x-2 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold px-3 py-2 rounded-lg transition shadow-sm">
+            <i class="fa-brands fa-google text-red-500"></i>
+            <span id="user-display-name">Sign In</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Live Sync Progress Bar -->
+    <div id="sync-progress-container" class="w-full bg-slate-700 h-1 hidden">
+      <div id="sync-progress-bar" class="bg-gradient-to-r from-amber-400 to-orange-500 h-1 w-0 transition-all duration-300"></div>
+    </div>
+  </header>
+
+  <!-- MAIN NAVIGATION TABS -->
+  <nav class="bg-slate-800/50 border-b border-slate-700/50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex space-x-2 sm:space-x-8 py-2 overflow-x-auto">
+        <button data-tab="dashboard-tab" class="nav-tab active-tab flex items-center space-x-2 px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg transition">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>District Dashboard</span>
+        </button>
+        <button data-tab="comparator-tab" class="nav-tab flex items-center space-x-2 px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg transition">
+          <i class="fa-solid fa-code-compare"></i>
+          <span>District Comparator</span>
+        </button>
+        <button data-tab="qa-tab" class="nav-tab flex items-center space-x-2 px-3 py-2 text-xs sm:text-sm font-semibold rounded-lg transition">
+          <i class="fa-solid fa-robot"></i>
+          <span>Gemini Smart Q&A</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- CONTENT CONTAINER -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ==================== TAB 1: DISTRICT DASHBOARD ==================== -->
+    <section id="dashboard-tab" class="tab-content space-y-6">
+      
+      <!-- District Selection & Live Feed Status Bar -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
+        <div class="flex items-center space-x-3">
+          <label for="district-select" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Select District:</label>
+          <select id="district-select" class="bg-slate-900 border border-slate-700 text-amber-400 text-sm font-bold rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500">
+            <!-- 38 Districts populated by app.js -->
+          </select>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <span class="text-slate-400">Data Source:</span>
+          <span id="data-source-weather" class="px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 font-medium">Weather: Initializing...</span>
+          <span id="data-source-aqi" class="px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 font-medium">AQI: Initializing...</span>
+          <span id="data-source-govt" class="px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 font-medium">Govt Open Data: Verified</span>
+        </div>
+      </div>
+
+      <!-- Real-Time Weather & Air Quality Banner -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Weather Card -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center justify-between shadow-md">
+          <div>
+            <p class="text-xs font-medium text-slate-400">Current Weather</p>
+            <h3 id="weather-temp" class="text-2xl font-bold text-slate-100 mt-1">-- °C</h3>
+            <p id="weather-condition" class="text-xs text-amber-400 mt-0.5 font-medium">--</p>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-2xl">
+            <i id="weather-icon" class="fa-solid fa-cloud-sun"></i>
+          </div>
+        </div>
+
+        <!-- AQI Card -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center justify-between shadow-md">
+          <div>
+            <p class="text-xs font-medium text-slate-400">Air Quality Index (AQI)</p>
+            <div class="flex items-baseline space-x-2 mt-1">
+              <h3 id="aqi-value" class="text-2xl font-bold text-slate-100">--</h3>
+              <span id="aqi-status" class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">Good</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5">PM2.5: <span id="aqi-pm25">--</span> | PM10: <span id="aqi-pm10">--</span></p>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-2xl">
+            <i class="fa-solid fa-wind"></i>
+          </div>
+        </div>
+
+        <!-- Rainfall & Humidity -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center justify-between shadow-md">
+          <div>
+            <p class="text-xs font-medium text-slate-400">Atmosphere</p>
+            <h3 id="weather-humidity" class="text-2xl font-bold text-slate-100 mt-1">-- %</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Wind: <span id="weather-wind" class="text-slate-200">-- km/h</span> | Rain: <span id="weather-rain" class="text-slate-200">-- mm</span></p>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-2xl">
+            <i class="fa-solid fa-droplet"></i>
+          </div>
+        </div>
+
+        <!-- District Demographic Summary -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-xl p-4 flex items-center justify-between shadow-md">
+          <div>
+            <p class="text-xs font-medium text-slate-400">Population & Area</p>
+            <h3 id="dist-population" class="text-2xl font-bold text-slate-100 mt-1">--</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Area: <span id="dist-area" class="text-slate-200">-- km²</span></p>
+          </div>
+          <div class="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-2xl">
+            <i class="fa-solid fa-users"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Departmental Metrics Grid (Govt Data Aggregator) -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Agriculture -->
+        <div class="bg-slate-800 border border-slate-700/80 rounded-xl p-5 shadow-lg flex flex-col justify-between">
+          <div>
+            <div class="flex items-center space-x-2 text-emerald-400 font-bold border-b border-slate-700 pb-3 mb-4">
+              <i class="fa-solid fa-wheat-awt"></i>
+              <h3>Agriculture & Irrigation</h3>
+            </div>
+            <div class="space-y-3">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Crop Yield Estimate:</span>
+                <span id="agri-yield" class="font-bold text-slate-200">-- tonnes/ha</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Soil Health Index:</span>
+                <span id="agri-soil" class="font-bold text-emerald-400">-- / 100</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Irrigation Coverage:</span>
+                <span id="agri-irrigation" class="font-bold text-slate-200">-- %</span>
+              </div>
+              <div class="mt-2 pt-2 border-t border-slate-700/50 text-xs">
+                <span class="text-slate-400 block mb-1">Primary Cultivation:</span>
+                <div id="agri-crops-pills" class="flex flex-wrap gap-1"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Health & Education -->
+        <div class="bg-slate-800 border border-slate-700/80 rounded-xl p-5 shadow-lg flex flex-col justify-between">
+          <div>
+            <div class="flex items-center space-x-2 text-rose-400 font-bold border-b border-slate-700 pb-3 mb-4">
+              <i class="fa-solid fa-hospital-user"></i>
+              <h3>Health & Education</h3>
+            </div>
+            <div class="space-y-3">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Literacy Rate:</span>
+                <span id="edu-literacy" class="font-bold text-amber-400">-- %</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Govt & Private Hospitals:</span>
+                <span id="health-hospitals" class="font-bold text-slate-200">--</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Primary Health Centers:</span>
+                <span id="health-phc" class="font-bold text-slate-200">--</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">School Density (per 10k):</span>
+                <span id="edu-school-density" class="font-bold text-slate-200">--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue & Infrastructure -->
+        <div class="bg-slate-800 border border-slate-700/80 rounded-xl p-5 shadow-lg flex flex-col justify-between">
+          <div>
+            <div class="flex items-center space-x-2 text-sky-400 font-bold border-b border-slate-700 pb-3 mb-4">
+              <i class="fa-solid fa-city"></i>
+              <h3>Revenue & Infrastructure</h3>
+            </div>
+            <div class="space-y-3">
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Road Network:</span>
+                <span id="infra-roads" class="font-bold text-slate-200">-- km</span>
+              </div>
+              <div class="flex justify-between items-center text-xs">
+                <span class="text-slate-400">Municipal Expenditure:</span>
+                <span id="infra-expenditure" class="font-bold text-sky-400">₹ -- Cr</span>
+              </div>
+              <div class="mt-2 pt-2 border-t border-slate-700/50 text-xs space-y-1">
+                <span class="text-slate-400 block">Land Use Breakdown:</span>
+                <div class="w-full bg-slate-700 rounded-full h-2.5 flex overflow-hidden">
+                  <div id="land-urban" class="bg-sky-500 h-2.5" title="Urban"></div>
+                  <div id="land-agri" class="bg-emerald-500 h-2.5" title="Agri"></div>
+                  <div id="land-forest" class="bg-amber-600 h-2.5" title="Forest"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-400 pt-1">
+                  <span>Urban: <b id="land-urban-val" class="text-slate-200">--%</b></span>
+                  <span>Agri: <b id="land-agri-val" class="text-slate-200">--%</b></span>
+                  <span>Forest: <b id="land-forest-val" class="text-slate-200">--%</b></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Live Map & Chart Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Interactive Leaflet Map -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-slate-200 flex items-center space-x-2">
+              <i class="fa-solid fa-map-location-dot text-amber-400"></i>
+              <span>Geospatial Digital Twin Center</span>
+            </h3>
+            <span id="map-coords" class="text-[11px] font-mono text-slate-400">Lat: -- | Lon: --</span>
+          </div>
+          <div id="district-map" class="w-full h-72 rounded-lg border border-slate-700 z-10"></div>
+        </div>
+
+        <!-- Metric Comparison Chart -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-slate-200 flex items-center space-x-2">
+              <i class="fa-solid fa-chart-column text-sky-400"></i>
+              <span>District vs. TN State Averages</span>
+            </h3>
+          </div>
+          <div class="w-full h-72 flex items-center justify-center">
+            <canvas id="district-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================== TAB 2: DISTRICT COMPARATOR ==================== -->
+    <section id="comparator-tab" class="tab-content hidden space-y-6">
+      
+      <!-- Selection Controls -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+        <h2 class="text-base font-bold text-amber-400 mb-4 flex items-center space-x-2">
+          <i class="fa-solid fa-scale-balanced"></i>
+          <span>Side-by-Side District Comparative Analytics</span>
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Primary District (A):</label>
+            <select id="compare-dist-a" class="w-full bg-slate-900 border border-slate-700 text-amber-400 font-bold rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <!-- Options populated by JS -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Comparison District (B):</label>
+            <select id="compare-dist-b" class="w-full bg-slate-900 border border-slate-700 text-sky-400 font-bold rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-500">
+              <!-- Options populated by JS -->
+            </select>
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <button id="run-ai-compare-btn" class="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold px-5 py-2.5 rounded-lg shadow-md transition flex items-center space-x-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>Generate Gemini AI Comparative Report</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Comparative Data Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- District A Card -->
+        <div id="compare-card-a" class="bg-slate-800 border border-amber-500/40 rounded-xl p-5 shadow-lg space-y-4">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- District B Card -->
+        <div id="compare-card-b" class="bg-slate-800 border border-sky-500/40 rounded-xl p-5 shadow-lg space-y-4">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Gemini AI Executive Summary Box -->
+      <div id="ai-compare-output-container" class="bg-slate-800/90 border border-amber-500/30 rounded-xl p-6 shadow-xl hidden">
+        <div class="flex items-center space-x-3 border-b border-slate-700 pb-3 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+            <i class="fa-solid fa-brain"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-amber-400 text-sm">Gemini AI Synthesis Report</h3>
+            <p class="text-[11px] text-slate-400">Natural-Language Comparative Analysis & Development Policy Insights</p>
+          </div>
+        </div>
+        <div id="ai-compare-text" class="prose prose-invert max-w-none text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+          <!-- AI generated report -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================== TAB 3: GEMINI SMART Q&A ==================== -->
+    <section id="qa-tab" class="tab-content hidden space-y-6">
+      
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-lg space-y-4">
+        <div class="flex items-center space-x-3 border-b border-slate-700 pb-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl">
+            <i class="fa-solid fa-comments"></i>
+          </div>
+          <div>
+            <h2 class="font-bold text-base text-slate-100">Smart District Query Assistant</h2>
+            <p class="text-xs text-slate-400">Ask natural-language questions grounded in live Tamil Nadu district data.</p>
+          </div>
+        </div>
+
+        <!-- Sample Query Preset Pills -->
+        <div class="space-y-1">
+          <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Suggested Queries:</p>
+          <div class="flex flex-wrap gap-2">
+            <button class="preset-query-btn bg-slate-700/60 hover:bg-slate-700 text-xs text-slate-300 px-3 py-1.5 rounded-full border border-slate-600 transition">
+              Which districts have the highest soil health and agricultural potential?
+            </button>
+            <button class="preset-query-btn bg-slate-700/60 hover:bg-slate-700 text-xs text-slate-300 px-3 py-1.5 rounded-full border border-slate-600 transition">
+              Analyze Coimbatore's infrastructure vs. air quality index.
+            </button>
+            <button class="preset-query-btn bg-slate-700/60 hover:bg-slate-700 text-xs text-slate-300 px-3 py-1.5 rounded-full border border-slate-600 transition">
+              Identify top 3 coastal districts needing hospital capacity upgrades.
+            </button>
+          </div>
+        </div>
+
+        <!-- Input Box -->
+        <div class="flex gap-2">
+          <input id="qa-input" type="text" placeholder="e.g. Compare literacy rate and school density between Madurai and Salem..."
+            class="flex-grow bg-slate-900 border border-slate-700 text-slate-100 text-sm rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <button id="ask-gemini-btn" class="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold px-6 py-3 rounded-lg shadow-md transition flex items-center space-x-2 text-xs sm:text-sm">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>Ask</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Q&A Response Output -->
+      <div id="qa-response-box" class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-lg hidden">
+        <div class="flex items-center space-x-2 text-amber-400 font-bold border-b border-slate-700 pb-3 mb-4 text-sm">
+          <i class="fa-solid fa-robot"></i>
+          <span>Gemini AI Response:</span>
+        </div>
+        <div id="qa-response-text" class="prose prose-invert max-w-none text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">
+          <!-- Text response -->
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- GEMINI API KEY MODAL -->
+  <div id="key-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center hidden p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+        <h3 class="font-bold text-amber-400 text-base flex items-center space-x-2">
+          <i class="fa-solid fa-key"></i>
+          <span>Configure Gemini API Key</span>
+        </h3>
+        <button id="close-key-modal-btn" class="text-slate-400 hover:text-slate-200 text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Connect your Google Gemini API Key to enable AI Comparator and Natural Language Q&A features. Your key is stored securely in your browser's local storage and used directly for Google API requests.
+      </p>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-semibold text-slate-400 uppercase">Gemini API Key:</label>
+        <input id="gemini-key-input" type="password" placeholder="AIzaSy..."
+          class="w-full bg-slate-900 border border-slate-700 text-slate-100 text-xs font-mono rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2">
+        <button id="clear-key-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold px-4 py-2 rounded-lg transition">
+          Clear Key
+        </button>
+        <button id="save-key-btn" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-5 py-2 rounded-lg shadow transition">
+          Save & Enable
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-900 border-t border-slate-800 py-4 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>© 2026 Tamil Nadu District Digital Twin Project · Open Government Data Portal Integration</p>
+      <p class="text-[11px] text-slate-600">Built for TN Educational & Public Decision Support</p>
+    </div>
+  </footer>
+
+  <!-- APPLICATION JAVASCRIPT MODULES -->
+  <script src="api-service.js"></script>
+  <script src="gemini-service.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

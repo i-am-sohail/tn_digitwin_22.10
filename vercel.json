@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/weather", "destination": "/api/weather.js" },
+    { "source": "/api/aqi", "destination": "/api/aqi.js" },
+    { "source": "/api/gemini", "destination": "/api/gemini.js" }
+  ]
+}
